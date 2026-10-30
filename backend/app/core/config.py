@@ -87,12 +87,14 @@ class Settings(BaseSettings):
     ENFORCE_DOCUMENT_RBAC: bool = True
 
     # LLM Generation Configuration (Phases 10, 11, 12)
-    LLM_PROVIDER: str = ""  # "openai", "gemini", or "" (mock for local/test)
+    LLM_PROVIDER: str = ""  # "openai", "ollama", or "" (mock for local/test)
     LLM_MODEL: str = "gpt-4o-mini"
     LLM_API_KEY: str = ""
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 1500
     LLM_TIMEOUT_SECONDS: float = 45.0
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2"
 
     # GraphRAG Advanced Retrieval Configuration (Phases 1-8)
     GRAPHRAG_VECTOR_TOP_K: int = 10
