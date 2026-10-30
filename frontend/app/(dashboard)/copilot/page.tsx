@@ -14,11 +14,13 @@ import {
   VectorSearchResultItem,
   VectorSearchResponse,
   sendCopilotChat,
+  streamCopilotChat,
   listConversations,
   getConversation,
   submitMessageFeedback,
   ConversationSummary,
 } from "@/lib/api";
+import { CitationDrawer, CitationDetail } from "@/components/copilot/CitationDrawer";
 import {
   Bot,
   Sparkles,
@@ -65,6 +67,7 @@ function CopilotChatContent() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Record<string, string>>({});
   const [chatError, setChatError] = useState<string | null>(null);
+  const [selectedCitation, setSelectedCitation] = useState<CitationDetail | null>(null);
 
   // Load recent conversations on mount
   useEffect(() => {
@@ -121,40 +124,109 @@ function CopilotChatContent() {
     setIsTyping(true);
     setChatError(null);
 
+    const assistantMsgId = `copilot-${Date.now()}`;
+    let accumulatedText = "";
+    let messageCreated = false;
+
     try {
-      const resp = await sendCopilotChat({
-        message: text,
-        conversation_id: conversationId,
-        include_graph: true,
-        max_depth: 2,
-      });
-
-      if (!conversationId && resp.conversation_id) {
-        setConversationId(resp.conversation_id);
-        loadConversationHistory();
-      }
-
-      const copilotMsg: CopilotMessage = {
-        id: resp.id,
-        sender: "copilot",
-        timestamp: "Just now",
-        text: resp.content,
-        citations: (resp.citations || []).map((c) => ({
-          id: Number(c.citation_index),
-          title: c.document_name,
-          location: c.section_title ? `${c.section_title} (p.${c.page_start || 1})` : `Page ${c.page_start || 1}`,
-          snippet: c.excerpt,
-        })),
-        entitiesMatched: resp.retrieval_metadata?.query_analysis?.detected_entities || [],
-        subgraphInsights: resp.retrieval_metadata?.graph_paths_count
-          ? `Verified ${resp.retrieval_metadata.graph_paths_count} Knowledge Graph path(s) using Neo4j (${resp.query_category || "multi-hop"})`
-          : undefined,
-      };
-
-      setMessages((prev) => [...prev, copilotMsg]);
+      await streamCopilotChat(
+        {
+          message: text,
+          conversation_id: conversationId,
+          include_graph: true,
+          max_depth: 2,
+        },
+        (token: string) => {
+          setIsTyping(false);
+          accumulatedText += token;
+          if (!messageCreated) {
+            messageCreated = true;
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: assistantMsgId,
+                sender: "copilot",
+                timestamp: "Just now",
+                text: accumulatedText,
+              },
+            ]);
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId ? { ...m, text: accumulatedText } : m
+              )
+            );
+          }
+        },
+        (meta: any) => {
+          if (!conversationId && meta?.conversation_id) {
+            setConversationId(meta.conversation_id);
+            loadConversationHistory();
+          }
+        },
+        (citations: any[]) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    citations: (citations || []).map((c: any) => ({
+                      id: Number(c.citation_index),
+                      title: c.document_name,
+                      location: c.section_title ? `${c.section_title} (p.${c.page_start || 1})` : `Page ${c.page_start || 1}`,
+                      snippet: c.excerpt,
+                      document_id: c.document_id,
+                      chunk_id: c.chunk_id,
+                      relevance_score: c.relevance_score,
+                    })),
+                  }
+                : m
+            )
+          );
+        }
+      );
     } catch (err: any) {
-      console.warn("Backend chat failed, showing error notification:", err);
-      setChatError(err.message || "Failed to reach backend Copilot service.");
+      console.warn("SSE stream failed, falling back to standard chat:", err);
+      try {
+        const resp = await sendCopilotChat({
+          message: text,
+          conversation_id: conversationId,
+          include_graph: true,
+          max_depth: 2,
+        });
+
+        if (!conversationId && resp.conversation_id) {
+          setConversationId(resp.conversation_id);
+          loadConversationHistory();
+        }
+
+        const copilotMsg: CopilotMessage = {
+          id: resp.id,
+          sender: "copilot",
+          timestamp: "Just now",
+          text: resp.content,
+          citations: (resp.citations || []).map((c) => ({
+            id: Number(c.citation_index),
+            title: c.document_name,
+            location: c.section_title ? `${c.section_title} (p.${c.page_start || 1})` : `Page ${c.page_start || 1}`,
+            snippet: c.excerpt,
+          })),
+          entitiesMatched: resp.retrieval_metadata?.query_analysis?.detected_entities || [],
+          subgraphInsights: resp.retrieval_metadata?.graph_paths_count
+            ? `Verified ${resp.retrieval_metadata.graph_paths_count} Knowledge Graph path(s) using Neo4j (${resp.query_category || "multi-hop"})`
+            : undefined,
+        };
+
+        if (messageCreated) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantMsgId ? copilotMsg : m))
+          );
+        } else {
+          setMessages((prev) => [...prev, copilotMsg]);
+        }
+      } catch (fallbackErr: any) {
+        setChatError(fallbackErr.message || "Failed to reach backend Copilot service.");
+      }
     } finally {
       setIsTyping(false);
     }
@@ -343,7 +415,11 @@ function CopilotChatContent() {
         <div className="flex-1 flex flex-col min-h-0">
           {/* Messages Scroll Area */}
           <div className="flex-1 overflow-y-auto pr-1">
-            <ChatMessageList messages={messages} isTyping={isTyping} />
+            <ChatMessageList
+              messages={messages}
+              isTyping={isTyping}
+              onSelectCitation={(c) => setSelectedCitation(c)}
+            />
           </div>
 
           {/* Input area */}
@@ -621,6 +697,12 @@ function CopilotChatContent() {
           </div>
         </div>
       )}
+
+      {/* Citation Provenance Drawer */}
+      <CitationDrawer
+        citation={selectedCitation}
+        onClose={() => setSelectedCitation(null)}
+      />
     </div>
   );
 }

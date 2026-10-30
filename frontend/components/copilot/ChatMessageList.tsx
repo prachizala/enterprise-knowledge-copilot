@@ -6,9 +6,14 @@ import { Badge } from "@/components/ui/Badge";
 export interface ChatMessageListProps {
   messages: CopilotMessage[];
   isTyping?: boolean;
+  onSelectCitation?: (citation: any) => void;
 }
 
-export function ChatMessageList({ messages, isTyping = false }: ChatMessageListProps) {
+export function ChatMessageList({
+  messages,
+  isTyping = false,
+  onSelectCitation,
+}: ChatMessageListProps) {
   return (
     <div className="space-y-6 py-4">
       {messages.map((msg) => {
@@ -87,10 +92,14 @@ export function ChatMessageList({ messages, isTyping = false }: ChatMessageListP
                     {msg.citations.map((cite) => (
                       <div
                         key={cite.id}
-                        className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 hover:border-slate-700 transition-colors"
+                        onClick={() => onSelectCitation && onSelectCitation(cite)}
+                        className={`p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 transition-all ${
+                          onSelectCitation ? "cursor-pointer hover:border-cyan-500/50 hover:bg-slate-900/90 shadow-sm" : ""
+                        }`}
+                        title="Click to view full grounded citation in provenance drawer"
                       >
                         <div className="flex items-center justify-between text-[11px] text-cyan-400 font-medium">
-                          <span>
+                          <span className="flex items-center gap-1">
                             [{cite.id}] {cite.title}
                           </span>
                           <span className="text-slate-500 text-[10px]">

@@ -54,6 +54,34 @@ async def chat(
         )
 
 
+@router.post("/chat/stream")
+async def chat_stream(
+    request: CopilotChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+    service: CopilotService = Depends(get_copilot_service),
+):
+    """
+    Stream Copilot response tokens in real-time via Server-Sent Events (SSE).
+    Emits metadata, tokens as generated, verified citations, and completion event.
+    """
+    from fastapi.responses import StreamingResponse
+
+    return StreamingResponse(
+        service.stream_chat(
+            db=db,
+            request=request,
+            current_user=current_user,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/conversations", response_model=List[ConversationSummary])
 async def list_conversations(
     limit: int = Query(50, ge=1, le=100),

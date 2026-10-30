@@ -54,3 +54,21 @@ async def test_copilot_chat_flow(async_client: AsyncClient):
     del_res = await async_client.delete(f"/api/copilot/conversations/{conversation_id}")
     assert del_res.status_code == 200
     assert del_res.json()["deleted"] is True
+
+
+@pytest.mark.asyncio
+async def test_copilot_chat_stream_flow(async_client: AsyncClient):
+    chat_payload = {
+        "message": "What is the policy for zero trust architecture?",
+        "include_graph": True,
+        "max_depth": 2,
+    }
+    res = await async_client.post("/api/copilot/chat/stream", json=chat_payload)
+    assert res.status_code == 200
+    assert "text/event-stream" in res.headers.get("content-type", "")
+
+    body = res.text
+    assert "data: " in body
+    assert '"event": "metadata"' in body
+    assert '"event": "token"' in body or '"event": "done"' in body
+    assert '"event": "done"' in body

@@ -320,3 +320,167 @@ class CopilotService:
             feedback_text=feedback.feedback_text,
             created_at=feedback.created_at,
         )
+
+    async def stream_chat(
+        self,
+        db: AsyncSession,
+        request: CopilotChatRequest,
+        current_user: Optional[User] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream response tokens chunk-by-chunk via Server-Sent Events (SSE)."""
+        import json
+
+        # 1. Resolve or create conversation
+        conversation: Optional[Conversation] = None
+        if request.conversation_id:
+            res = await db.execute(
+                select(Conversation)
+                .where(Conversation.id == request.conversation_id)
+                .options(selectinload(Conversation.messages))
+            )
+            conversation = res.scalars().first()
+
+        if not conversation:
+            title = request.message[:60].strip()
+            if len(request.message) > 60:
+                title += "..."
+            conversation = Conversation(
+                id=str(uuid4()),
+                user_id=current_user.id if current_user else None,
+                title=title,
+            )
+            db.add(conversation)
+            await db.flush()
+
+        # 2. Gather conversation history
+        history_res = await db.execute(
+            select(ConversationMessage)
+            .where(ConversationMessage.conversation_id == conversation.id)
+            .order_by(desc(ConversationMessage.created_at))
+            .limit(6)
+        )
+        prev_msgs = list(reversed(history_res.scalars().all()))
+        chat_history = [{"role": msg.sender, "content": msg.content} for msg in prev_msgs]
+
+        # 3. Save incoming user message
+        user_msg = ConversationMessage(
+            id=str(uuid4()),
+            conversation_id=conversation.id,
+            sender="user",
+            content=request.message,
+        )
+        db.add(user_msg)
+        await db.flush()
+
+        # 4. Perform Tri-Hybrid GraphRAG Retrieval
+        grounded_context = await self.retrieval_service.retrieve(
+            db=db,
+            query=request.message,
+            user=current_user,
+            top_k=5,
+            department=request.department,
+            document_id=request.document_ids[0] if request.document_ids else None,
+            depth=request.max_depth,
+            include_graph=request.include_graph,
+        )
+
+        # 5. Emit metadata event
+        meta_payload = {
+            "event": "metadata",
+            "conversation_id": conversation.id,
+            "query_analysis": grounded_context.query_analysis.model_dump(),
+            "fused_count": len(grounded_context.candidates),
+            "graph_paths_count": len(grounded_context.graph_paths),
+            "latencies_ms": grounded_context.latency_ms,
+        }
+        yield f"data: {json.dumps(meta_payload)}\n\n"
+
+        # 6. Stream tokens
+        full_tokens: List[str] = []
+        async for token_chunk in self.generation_service.stream_answer(
+            query=request.message,
+            grounded_context=grounded_context,
+            chat_history=chat_history,
+        ):
+            full_tokens.append(token_chunk)
+            token_payload = {"event": "token", "token": token_chunk}
+            yield f"data: {json.dumps(token_payload)}\n\n"
+
+        raw_answer = "".join(full_tokens)
+
+        # 7. Extract citations & score grounding
+        citations = self.generation_service.citation_extractor.extract_citations(
+            answer_text=raw_answer,
+            fused_candidates=grounded_context.candidates,
+            graph_paths=grounded_context.graph_paths,
+        )
+
+        grounding_score = self.generation_service.grounding_scorer.score(
+            answer=raw_answer,
+            citations=citations,
+            grounded_context=grounded_context,
+        )
+
+        # 8. Persist Copilot message & citations
+        copilot_msg_id = str(uuid4())
+        retrieval_metadata = {
+            "query_analysis": grounded_context.query_analysis.model_dump(),
+            "fused_count": len(grounded_context.candidates),
+            "graph_paths_count": len(grounded_context.graph_paths),
+            "latencies_ms": grounded_context.latency_ms,
+            "provider": getattr(self.generation_service.provider, "name", "mock"),
+            "model": getattr(self.generation_service.provider, "model", "mock"),
+        }
+
+        copilot_msg = ConversationMessage(
+            id=copilot_msg_id,
+            conversation_id=conversation.id,
+            sender="copilot",
+            content=raw_answer,
+            grounding_score=grounding_score,
+            query_category=grounded_context.query_analysis.category,
+            retrieval_metadata=retrieval_metadata,
+        )
+        db.add(copilot_msg)
+        await db.flush()
+
+        citation_payloads = []
+        for c in citations:
+            citation_model = MessageCitation(
+                id=str(uuid4()),
+                message_id=copilot_msg_id,
+                citation_index=c.citation_index,
+                document_id=c.document_id,
+                document_name=c.document_name,
+                chunk_id=c.chunk_id,
+                page_start=c.page_start,
+                page_end=c.page_end,
+                section_title=c.section_title,
+                excerpt=c.excerpt,
+                relevance_score=c.relevance_score,
+            )
+            db.add(citation_model)
+            citation_payloads.append({
+                "id": str(citation_model.id),
+                "citation_index": c.citation_index,
+                "document_id": c.document_id,
+                "document_name": c.document_name,
+                "chunk_id": c.chunk_id,
+                "page_start": c.page_start,
+                "section_title": c.section_title,
+                "excerpt": c.excerpt,
+                "relevance_score": c.relevance_score,
+            })
+
+        await db.commit()
+
+        # 9. Emit citations & done event
+        done_payload = {
+            "event": "done",
+            "message_id": copilot_msg_id,
+            "conversation_id": conversation.id,
+            "citations": citation_payloads,
+            "grounding_score": grounding_score,
+            "query_category": grounded_context.query_analysis.category,
+        }
+        yield f"data: {json.dumps(done_payload)}\n\n"

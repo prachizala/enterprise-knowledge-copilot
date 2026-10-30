@@ -6,11 +6,13 @@
 ![Next.js](https://img.shields.io/badge/Next.js-14.2-000000?logo=nextdotjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20pgvector-4169E1?logo=postgresql&logoColor=white)
 ![Neo4j](https://img.shields.io/badge/Neo4j-5.20-45818E?logo=neo4j&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-148%20Passed-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-149%20Passed-brightgreen)
+![Streaming](https://img.shields.io/badge/Streaming-SSE%20Enabled-00b4d8)
 ![Ollama](https://img.shields.io/badge/Local%20LLM-Ollama%20Supported-orange?logo=ollama)
 ![Retrieval](https://img.shields.io/badge/Retrieval-Tri--Hybrid%20(Dense%20%2B%20BM25%20%2B%20Graph)-blueviolet)
 
 > **Production Status:** Steps 1 through 16 are **fully implemented and verified**. The platform is an end-to-end operational GraphRAG enterprise intelligence system featuring:
+> - **Real-Time Token Streaming**: Server-Sent Events (SSE) `/api/copilot/chat/stream` for immediate response delivery and interactive provenance inspection via Citation Drawer.
 > - **Zero-Cost & Offline Ready**: Native support for **Ollama** (`llama3.2`, `qwen2.5`, `mistral`) alongside OpenAI and deterministic offline mocks.
 > - **Tri-Hybrid Retrieval Engine** (Fusing Dense pgvector cosine embeddings + Sparse Okapi BM25 keyword matching + Neo4j knowledge graph topology traversal via Weighted Reciprocal Rank Fusion).
 > - **RBAC Authentication & Security** (JWT tokens, role-based document access: `ADMIN`, `MANAGER`, `EMPLOYEE`, `VIEWER`).
@@ -18,8 +20,8 @@
 > - **Dense Semantic Vector Search** (pgvector HNSW cosine indexing with 1536D embeddings).
 > - **Enterprise Knowledge Graph** (Neo4j 5.20 with multi-hop Cypher traversal and bidirectional PostgreSQL synchronization).
 > - **Hybrid GraphRAG Retrieval Engine** (Query analysis, entity linking, vector retrieval, graph expansion, Reciprocal Rank Fusion, MMR reranking, anti-prompt injection delimiters).
-> - **Grounded LLM Generation Subsystem** (OpenAI / Mock providers with zero-hallucination refusals and strict evidence containment).
-> - **Verified In-Text Citations** (`[1]`, `[2]` linking assertions to source documents, page numbers, and chunk coordinates).
+> - **Grounded LLM Generation Subsystem** (OpenAI / Ollama / Mock providers with zero-hallucination refusals and strict evidence containment).
+> - **Verified In-Text Citations & Provenance Drawer** (`[1]`, `[2]` linking assertions to source documents, page numbers, and chunk coordinates with deep inspection).
 > - **Conversational Copilot** (Multi-turn dialogue, session persistence, explicit feedback logging, latency tracking).
 > - **6-Stage Background Ingestion Pipeline** (Extraction $\to$ Chunking $\to$ Embeddings $\to$ Entities $\to$ Relationships $\to$ Neo4j Sync).
 > - **Evaluation Benchmark Suite** (Precision, recall, groundedness score, citation validity, hallucination rate, latency).
