@@ -51,8 +51,15 @@ class DeterministicReranker(BaseReranker):
             entity_matches = sum(1 for name in entity_names if name in content_lower)
             entity_score = min(1.0, entity_matches * 0.4)
 
-            # 3. Hybrid synergy bonus (appears in both vector and graph)
-            hybrid_bonus = 0.25 if cand.origin == "hybrid" else (0.10 if cand.origin == "graph" else 0.0)
+            # 3. Hybrid synergy bonus (multi-modal retrieval agreement)
+            if cand.origin == "tri-hybrid":
+                hybrid_bonus = 0.35
+            elif cand.origin == "hybrid":
+                hybrid_bonus = 0.25
+            elif cand.origin in ("graph", "sparse"):
+                hybrid_bonus = 0.10
+            else:
+                hybrid_bonus = 0.0
 
             # 4. Section header match bonus
             header_bonus = 0.0

@@ -6,9 +6,11 @@
 ![Next.js](https://img.shields.io/badge/Next.js-14.2-000000?logo=nextdotjs&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20pgvector-4169E1?logo=postgresql&logoColor=white)
 ![Neo4j](https://img.shields.io/badge/Neo4j-5.20-45818E?logo=neo4j&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-140%20Passed-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-143%20Passed-brightgreen)
+![Retrieval](https://img.shields.io/badge/Retrieval-Tri--Hybrid%20(Dense%20%2B%20BM25%20%2B%20Graph)-blueviolet)
 
-> **Production Status:** Steps 1 through 15 are **fully implemented and verified**. The platform is an end-to-end operational GraphRAG enterprise intelligence system featuring:
+> **Production Status:** Steps 1 through 16 are **fully implemented and verified**. The platform is an end-to-end operational GraphRAG enterprise intelligence system featuring:
+> - **Tri-Hybrid Retrieval Engine** (Fusing Dense pgvector cosine embeddings + Sparse Okapi BM25 keyword matching + Neo4j knowledge graph topology traversal via Weighted Reciprocal Rank Fusion).
 > - **RBAC Authentication & Security** (JWT tokens, role-based document access: `ADMIN`, `MANAGER`, `EMPLOYEE`, `VIEWER`).
 > - **Relational Storage of Truth** (PostgreSQL 16 + SQLAlchemy 2.x async + Alembic).
 > - **Dense Semantic Vector Search** (pgvector HNSW cosine indexing with 1536D embeddings).

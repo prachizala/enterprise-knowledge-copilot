@@ -15,6 +15,7 @@ from app.retrieval.diversification import DiversificationService
 from app.retrieval.entity_linker import EntityLinker
 from app.retrieval.graph_expander import GraphExpander
 from app.retrieval.graph_search import GraphSearchService
+from app.retrieval.keyword_search import KeywordSearchService
 from app.retrieval.query_analyzer import QueryAnalyzer
 from app.retrieval.reranker import DeterministicReranker
 from app.retrieval.schemas import (
@@ -52,11 +53,12 @@ class GraphRAGRetrievalService:
         document_id: Optional[str] = None,
         depth: int = 2,
         include_graph: bool = True,
-        vector_weight: float = 0.50,
-        graph_weight: float = 0.50,
+        vector_weight: float = 0.40,
+        sparse_weight: float = 0.30,
+        graph_weight: float = 0.30,
         rrf_k: int = 60,
     ) -> GroundedContext:
-        """Execute full end-to-end GraphRAG retrieval pipeline and return grounded context."""
+        """Execute full end-to-end Tri-Hybrid GraphRAG retrieval pipeline and return grounded context."""
         latencies = {}
         t_total_start = time.perf_counter()
 
@@ -86,7 +88,8 @@ class GraphRAGRetrievalService:
                 doc_stmt = select(Document.id).where(rbac_filter)
                 allowed_doc_ids = set((await db.execute(doc_stmt)).scalars().all())
 
-        # 4. Vector Retrieval
+        # 4. Dense Vector Retrieval
+        t_vec_start = time.perf_counter()
         vector_candidates = await VectorSearchService.search_candidates(
             db=db,
             query=query,
@@ -96,7 +99,19 @@ class GraphRAGRetrievalService:
             department=effective_department,
             document_id=effective_doc_id,
         )
-        latencies["vector_retrieval_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
+        latencies["vector_retrieval_ms"] = round((time.perf_counter() - t_vec_start) * 1000, 2)
+
+        # 4b. Sparse Lexical Retrieval (BM25)
+        t_sparse_start = time.perf_counter()
+        sparse_candidates = await KeywordSearchService.search_candidates(
+            db=db,
+            query=query,
+            user=user,
+            top_k=top_k * 2,
+            department=effective_department,
+            document_id=effective_doc_id,
+        )
+        latencies["sparse_retrieval_ms"] = round((time.perf_counter() - t_sparse_start) * 1000, 2)
 
         # 5. Graph Retrieval & Multi-hop Expansion
         graph_candidates = []
@@ -121,14 +136,16 @@ class GraphRAGRetrievalService:
             latencies["graph_search_ms"] = 0.0
             latencies["multi_hop_expansion_ms"] = 0.0
 
-        # 6. Candidate Fusion (RRF + Weighted)
+        # 6. Candidate Fusion (Tri-Hybrid RRF + Weighted)
         t_start = time.perf_counter()
         fused = await self.fusion.fuse(
             db=db,
             vector_candidates=vector_candidates,
             graph_candidates=graph_candidates,
             graph_paths=graph_paths,
+            sparse_candidates=sparse_candidates,
             vector_weight=vector_weight,
+            sparse_weight=sparse_weight,
             graph_weight=graph_weight,
             rrf_k=rrf_k,
         )

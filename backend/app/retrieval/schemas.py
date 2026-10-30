@@ -58,6 +58,25 @@ class VectorCandidate(BaseModel):
     content_hash: Optional[str] = None
 
 
+class SparseCandidate(BaseModel):
+    """Document chunk candidate retrieved from keyword / BM25 lexical search."""
+    chunk_id: str
+    document_id: str
+    document_title: str
+    chunk_index: int
+    page_number: Optional[int] = None
+    section_title: Optional[str] = None
+    content: str
+    bm25_score: float
+    matched_terms: List[str] = Field(default_factory=list)
+    department: str = "General"
+    content_hash: Optional[str] = None
+
+    @property
+    def similarity_score(self) -> float:
+        return self.bm25_score
+
+
 class GraphCandidate(BaseModel):
     """Entity and relationship candidate retrieved from Knowledge Graph."""
     entity_id: str
@@ -95,13 +114,15 @@ class FusedCandidate(BaseModel):
     section_title: Optional[str] = None
     content: str
     vector_score: float = 0.0
+    sparse_score: float = 0.0
     graph_score: float = 0.0
     rrf_score: float = 0.0
     final_score: float = 0.0
     fused_score: float = 0.0
-    origin: str = "hybrid"  # vector, graph, hybrid
+    origin: str = "hybrid"  # vector, sparse, graph, hybrid, tri-hybrid
     evidence_type: str = "document_chunk"
     connected_entities: List[str] = Field(default_factory=list)
+    matched_keywords: List[str] = Field(default_factory=list)
 
     def model_post_init(self, __context: object) -> None:
         if self.document_name and (not self.document_title or self.document_title == "Document"):
