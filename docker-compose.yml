@@ -1,0 +1,124 @@
+version: "3.8"
+
+services:
+  # ----------------------------------------------------------------------------
+  # Next.js Frontend Dashboard
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: copilot-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+    networks:
+      - copilot-network
+
+  # ----------------------------------------------------------------------------
+  # FastAPI Backend API
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: copilot-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - DATABASE_URL=${DATABASE_URL:-postgresql://copilot_user:copilot_dev_password@postgres:5432/enterprise_knowledge}
+      - POSTGRES_USER=${POSTGRES_USER:-copilot_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-copilot_dev_password}
+      - POSTGRES_DB=${POSTGRES_DB:-enterprise_knowledge}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-copilot_graph_dev_password}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_API_KEY=${LLM_API_KEY:-your-llm-api-key-here}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev_insecure_jwt_secret_change_in_production}
+      - GRAPHRAG_DENSE_WEIGHT=${GRAPHRAG_DENSE_WEIGHT:-0.5}
+      - GRAPHRAG_GRAPH_WEIGHT=${GRAPHRAG_GRAPH_WEIGHT:-0.5}
+      - GRAPHRAG_TOP_K=${GRAPHRAG_TOP_K:-10}
+      - GRAPHRAG_MAX_DEPTH=${GRAPHRAG_MAX_DEPTH:-2}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - copilot-network
+
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Relational Database (Enterprise metadata, documents, auth)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: copilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-copilot_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-copilot_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-enterprise_knowledge}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-copilot_user} -d ${POSTGRES_DB:-enterprise_knowledge}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - copilot-network
+
+  # ----------------------------------------------------------------------------
+  # Neo4j Graph Database (Enterprise Knowledge Graph & Ontologies)
+  # ----------------------------------------------------------------------------
+  neo4j:
+    image: neo4j:5.20-community
+    container_name: copilot-neo4j
+    restart: unless-stopped
+    environment:
+      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-copilot_graph_dev_password}
+      - NEO4J_PLUGINS=["apoc"]
+    ports:
+      - "7474:7474" # Neo4j Browser Web UI
+      - "7687:7687" # Bolt protocol endpoint
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - copilot-network
+
+# ------------------------------------------------------------------------------
+# Persistent Storage Volumes & Network
+# ------------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+
+networks:
+  copilot-network:
+    driver: bridge
