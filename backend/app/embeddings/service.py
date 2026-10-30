@@ -266,3 +266,6 @@ class EmbeddingService:
             failed_documents=failed_docs,
             errors=errors,
         )
+
+    # Alias for backward compatibility with older pipeline orchestrators
+    embed_document_chunks = generate_document_embeddings

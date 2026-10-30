@@ -113,10 +113,10 @@ class DocumentIngestionOrchestrator:
             job.progress_pct = 55
             await db.commit()
 
-            emb_res = await EmbeddingService.embed_document_chunks(
+            emb_res = await EmbeddingService.generate_document_embeddings(
                 db=db, document_id=document_id, force=force_retry
             )
-            metrics["embedded_chunks"] = emb_res.embedded_count
+            metrics["embedded_chunks"] = emb_res.embedded_chunks
 
             # STEP 4: Entity Extraction & Normalization (75%)
             logger.info(f"Ingestion [{document_id}] Step 4/6: Extracting entities...")

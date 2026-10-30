@@ -254,6 +254,9 @@ pip install -e .
 # Run database migrations
 alembic upgrade head
 
+# (Optional) Seed demo enterprise documents and test accounts
+python scripts/seed_demo_data.py
+
 # Start FastAPI development server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -272,7 +275,7 @@ cd backend
 pytest -v
 ```
 
-All 140 automated tests across authentication, chunking, embeddings, entities, relationships, graph synchronization, GraphRAG retrieval, LLM generation, copilot conversations, and ingestion jobs pass with 100% coverage.
+All 149 automated tests across authentication, chunking, embeddings, entities, relationships, graph synchronization, Tri-Hybrid retrieval (BM25 + pgvector + Neo4j), Ollama provider, copilot streaming conversations, and ingestion jobs pass with 100% coverage.
 
 ---
 
