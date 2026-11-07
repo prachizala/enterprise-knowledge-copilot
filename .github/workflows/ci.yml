@@ -28,6 +28,7 @@ jobs:
 
       - name: Run Backend Test Suite
         env:
+          PYTHONPATH: "."
           DATABASE_URL: "sqlite+aiosqlite:///copilot_test.db"
           LLM_PROVIDER: "mock"
           EMBEDDING_PROVIDER: "mock"
