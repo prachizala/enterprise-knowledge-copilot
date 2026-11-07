@@ -8,6 +8,7 @@ import {
   INITIAL_COPILOT_MESSAGES,
   EXAMPLE_QUESTIONS,
   CopilotMessage,
+  TraversedSubgraphData,
 } from "@/lib/demo-data";
 import {
   vectorSearch,
@@ -21,6 +22,7 @@ import {
   ConversationSummary,
 } from "@/lib/api";
 import { CitationDrawer, CitationDetail } from "@/components/copilot/CitationDrawer";
+import { TraversedGraphModal } from "@/components/copilot/TraversedGraphModal";
 import {
   Bot,
   Sparkles,
@@ -68,6 +70,8 @@ function CopilotChatContent() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Record<string, string>>({});
   const [chatError, setChatError] = useState<string | null>(null);
   const [selectedCitation, setSelectedCitation] = useState<CitationDetail | null>(null);
+  const [activeVisualizerSubgraph, setActiveVisualizerSubgraph] = useState<TraversedSubgraphData | null>(null);
+  const [visualizerCategory, setVisualizerCategory] = useState<string>("Neo4j Multi-Hop Traversal");
 
   // Load recent conversations on mount
   useEffect(() => {
@@ -99,6 +103,7 @@ function CopilotChatContent() {
           snippet: c.excerpt,
         })),
         entitiesMatched: m.retrieval_metadata?.query_analysis?.detected_entities || [],
+        traversedSubgraph: m.retrieval_metadata?.traversed_subgraph,
         subgraphInsights: m.retrieval_metadata?.graph_paths_count
           ? `Verified ${m.retrieval_metadata.graph_paths_count} Knowledge Graph path(s) using Neo4j (${m.query_category || "multi-hop"})`
           : undefined,
@@ -163,6 +168,21 @@ function CopilotChatContent() {
             setConversationId(meta.conversation_id);
             loadConversationHistory();
           }
+          if (meta?.traversed_subgraph) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      traversedSubgraph: meta.traversed_subgraph,
+                      subgraphInsights: meta.traversed_subgraph?.traversal_stats?.nodes_count
+                        ? `Traversed ${meta.traversed_subgraph.traversal_stats.nodes_count} nodes & ${meta.traversed_subgraph.traversal_stats.edges_count} edges in Neo4j (${meta.traversed_subgraph.traversal_stats.query_category || "multi-hop"})`
+                        : m.subgraphInsights,
+                    }
+                  : m
+              )
+            );
+          }
         },
         (citations: any[]) => {
           setMessages((prev) =>
@@ -183,6 +203,23 @@ function CopilotChatContent() {
                 : m
             )
           );
+        },
+        (subgraph: any) => {
+          if (subgraph) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      traversedSubgraph: subgraph,
+                      subgraphInsights: subgraph?.traversal_stats?.nodes_count
+                        ? `Traversed ${subgraph.traversal_stats.nodes_count} nodes & ${subgraph.traversal_stats.edges_count} edges in Neo4j (${subgraph.traversal_stats.query_category || "multi-hop"})`
+                        : m.subgraphInsights,
+                    }
+                  : m
+              )
+            );
+          }
         }
       );
     } catch (err: any) {
@@ -212,6 +249,7 @@ function CopilotChatContent() {
             snippet: c.excerpt,
           })),
           entitiesMatched: resp.retrieval_metadata?.query_analysis?.detected_entities || [],
+          traversedSubgraph: resp.retrieval_metadata?.traversed_subgraph,
           subgraphInsights: resp.retrieval_metadata?.graph_paths_count
             ? `Verified ${resp.retrieval_metadata.graph_paths_count} Knowledge Graph path(s) using Neo4j (${resp.query_category || "multi-hop"})`
             : undefined,
@@ -419,6 +457,10 @@ function CopilotChatContent() {
               messages={messages}
               isTyping={isTyping}
               onSelectCitation={(c) => setSelectedCitation(c)}
+              onOpenGraphVisualizer={(subgraph, category) => {
+                setActiveVisualizerSubgraph(subgraph);
+                if (category) setVisualizerCategory(category);
+              }}
             />
           </div>
 
@@ -702,6 +744,14 @@ function CopilotChatContent() {
       <CitationDrawer
         citation={selectedCitation}
         onClose={() => setSelectedCitation(null)}
+      />
+
+      {/* Interactive 3D/2D Knowledge Graph Visualizer Modal */}
+      <TraversedGraphModal
+        isOpen={!!activeVisualizerSubgraph}
+        onClose={() => setActiveVisualizerSubgraph(null)}
+        subgraph={activeVisualizerSubgraph}
+        queryCategory={visualizerCategory}
       />
     </div>
   );

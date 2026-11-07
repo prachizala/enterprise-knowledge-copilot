@@ -19,6 +19,9 @@ async def test_copilot_chat_flow(async_client: AsyncClient):
     assert msg["sender"] == "copilot"
     assert "content" in msg
     assert msg["grounding_score"] is not None
+    assert "retrieval_metadata" in msg
+    assert "traversed_subgraph" in msg["retrieval_metadata"]
+    assert len(msg["retrieval_metadata"]["traversed_subgraph"]["nodes"]) >= 1
     conversation_id = msg["conversation_id"]
     message_id = msg["id"]
     assert conversation_id is not None
@@ -72,3 +75,4 @@ async def test_copilot_chat_stream_flow(async_client: AsyncClient):
     assert '"event": "metadata"' in body
     assert '"event": "token"' in body or '"event": "done"' in body
     assert '"event": "done"' in body
+    assert '"traversed_subgraph"' in body

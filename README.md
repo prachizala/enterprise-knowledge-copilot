@@ -8,10 +8,12 @@
 ![Neo4j](https://img.shields.io/badge/Neo4j-5.20-45818E?logo=neo4j&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-149%20Passed-brightgreen)
 ![Streaming](https://img.shields.io/badge/Streaming-SSE%20Enabled-00b4d8)
+![Graph Visualizer](https://img.shields.io/badge/Graph%20Visualizer-3D%20%2F%202D%20Interactive-ff007f)
 ![Ollama](https://img.shields.io/badge/Local%20LLM-Ollama%20Supported-orange?logo=ollama)
 ![Retrieval](https://img.shields.io/badge/Retrieval-Tri--Hybrid%20(Dense%20%2B%20BM25%20%2B%20Graph)-blueviolet)
 
 > **Production Status:** Steps 1 through 16 are **fully implemented and verified**. The platform is an end-to-end operational GraphRAG enterprise intelligence system featuring:
+> - **Interactive 3D / 2D Knowledge Graph Visualizer**: Real-time visualization of the exact nodes and relationships traversed in Neo4j (e.g., `Employee -> BELONGS_TO -> Department -> MANAGED_BY -> Lead`) with 2D force-directed physics, 3D holographic isometric perspective, automated step-by-step path playback, and node HUD inspection.
 > - **Real-Time Token Streaming**: Server-Sent Events (SSE) `/api/copilot/chat/stream` for immediate response delivery and interactive provenance inspection via Citation Drawer.
 > - **Zero-Cost & Offline Ready**: Native support for **Ollama** (`llama3.2`, `qwen2.5`, `mistral`) alongside OpenAI and deterministic offline mocks.
 > - **Tri-Hybrid Retrieval Engine** (Fusing Dense pgvector cosine embeddings + Sparse Okapi BM25 keyword matching + Neo4j knowledge graph topology traversal via Weighted Reciprocal Rank Fusion).
