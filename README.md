@@ -246,6 +246,19 @@ docker-compose up --build -d
 
 ## 6. Local Development Setup
 
+### Local Development without Docker (`MOCK_NEO4J=true`)
+
+You can develop, run, and test the entire backend without spinning up Docker or Neo4j containers by activating the in-memory mock knowledge graph:
+
+```bash
+# In your .env or shell environment:
+MOCK_NEO4J=true
+```
+
+- When `MOCK_NEO4J=true` (or when the Neo4j instance at `NEO4J_URI` is unreachable), `Neo4jClient` seamlessly activates an **in-memory structured mock knowledge graph**.
+- Queries for entities, relationships, health status, and multi-hop subgraphs return structured mock responses instead of raising connection errors or crashing.
+- This allows full local development, frontend UI exploration, and automated test execution on low-resource machines without Docker.
+
 ### Backend Setup
 ```bash
 cd backend
