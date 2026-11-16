@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     NEO4J_MAX_CONNECTION_POOL_SIZE: int = 50
     NEO4J_CONNECTION_TIMEOUT: float = 30.0
     NEO4J_MAX_CONNECTION_LIFETIME: float = 3600.0
+    MOCK_NEO4J: bool = False
 
     @property
     def neo4j_effective_user(self) -> str:

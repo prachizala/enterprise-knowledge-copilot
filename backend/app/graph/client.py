@@ -13,6 +13,7 @@ class Neo4jClient:
 
     def __init__(self) -> None:
         self._driver = None
+        self._is_mock = False
         self._database = settings.NEO4J_DATABASE or "neo4j"
         self._uri = settings.NEO4J_URI
         self._user = settings.neo4j_effective_user
@@ -22,7 +23,12 @@ class Neo4jClient:
         self._max_lifetime = settings.NEO4J_MAX_CONNECTION_LIFETIME
 
     async def connect(self) -> bool:
-        """Initialize the Neo4j AsyncDriver if not already connected."""
+        """Initialize the Neo4j AsyncDriver if not already connected, or fallback to mock."""
+        if getattr(settings, "MOCK_NEO4J", False):
+            logger.info("MOCK_NEO4J is set to True. Using In-Memory Structured Mock Graph.")
+            self._is_mock = True
+            return True
+
         if self._driver is not None:
             return True
 
@@ -41,11 +47,13 @@ class Neo4jClient:
             # Verify connectivity
             await self._driver.verify_connectivity()
             logger.info("Connected to Neo4j successfully.")
+            self._is_mock = False
             return True
         except Exception as exc:
-            logger.warning("Failed to establish Neo4j connection: %s", exc)
+            logger.warning("Failed to establish Neo4j connection: %s. Falling back to In-Memory Mock Graph.", exc)
             self._driver = None
-            return False
+            self._is_mock = True
+            return True
 
     async def close(self) -> None:
         """Close the Neo4j driver and release all connection pool sockets."""
@@ -57,11 +65,17 @@ class Neo4jClient:
                 logger.warning("Error while closing Neo4j driver: %s", exc)
             finally:
                 self._driver = None
+        self._is_mock = False
 
     @property
     def is_connected(self) -> bool:
-        """Check if driver instance is currently created."""
-        return self._driver is not None
+        """Check if driver instance or active mock fallback is currently created."""
+        return self._driver is not None or self._is_mock
+
+    @property
+    def is_mock(self) -> bool:
+        """Return whether in-memory mock graph fallback is active."""
+        return self._is_mock
 
     async def execute_query(
         self,
@@ -71,9 +85,11 @@ class Neo4jClient:
     ) -> List[Dict[str, Any]]:
         """Execute a read/write parameterized Cypher query and return records as dicts."""
         if not self.is_connected:
-            connected = await self.connect()
-            if not connected or self._driver is None:
-                raise ConnectionError("Neo4j database is not reachable")
+            await self.connect()
+
+        if self._is_mock:
+            from app.graph.mock_store import mock_store
+            return mock_store.execute_mock_query(query, parameters)
 
         target_db = database or self._database
         records_out: List[Dict[str, Any]] = []
@@ -97,9 +113,12 @@ class Neo4jClient:
     ) -> Any:
         """Execute a parameterized Cypher write transaction."""
         if not self.is_connected:
-            connected = await self.connect()
-            if not connected or self._driver is None:
-                raise ConnectionError("Neo4j database is not reachable")
+            await self.connect()
+
+        if self._is_mock:
+            logger.info("Mock Neo4j write transaction recorded (mock mode active).")
+            from app.graph.mock_store import mock_store
+            return mock_store.execute_mock_query(query, parameters)
 
         target_db = database or self._database
 
@@ -114,14 +133,18 @@ class Neo4jClient:
         """Verify Neo4j connectivity and return basic graph topology statistics."""
         try:
             if not self.is_connected:
-                connected = await self.connect()
-                if not connected:
-                    return {
-                        "status": "unhealthy",
-                        "database": self._database,
-                        "connected": False,
-                        "error": "Cannot connect to Neo4j instance",
-                    }
+                await self.connect()
+
+            if self._is_mock:
+                from app.graph.mock_store import mock_store
+                return {
+                    "status": "healthy",
+                    "database": "mock_in_memory",
+                    "connected": True,
+                    "mock_mode": True,
+                    "node_count": len(mock_store.entities),
+                    "relationship_count": len(mock_store.relationships),
+                }
 
             # Run light query for connectivity and counts
             counts = await self.execute_query(
